@@ -135,7 +135,7 @@ def calculate_position_size(account_size, risk_percentage, entry_price, technica
 def format_currency(value, currency='USD'):
     """Format a number as currency with the appropriate symbol."""
     symbol = CURRENCIES[currency]['symbol']
-    return f"{symbol}{value:,.2f}"
+    return f"{value:,.2f} ({currency})"
 
 def display_exit_strategy(exit_strategy, currency='USD'):
     """Display the exit strategy in a formatted way."""
