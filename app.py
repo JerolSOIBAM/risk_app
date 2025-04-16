@@ -3,6 +3,14 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+# Currency configuration
+CURRENCIES = {
+    'USD': {'symbol': '$', 'name': 'US Dollar', 'icon': '💵'},
+    'EUR': {'symbol': '€', 'name': 'Euro', 'icon': '💶'},
+    'SEK': {'symbol': 'kr', 'name': 'Swedish Krona', 'icon': '🇸🇪'},
+    'INR': {'symbol': '₹', 'name': 'Indian Rupee', 'icon': '🇮🇳'}
+}
+
 # Set page config
 st.set_page_config(
     page_title="Trade Risk Calculator",
@@ -124,7 +132,12 @@ def calculate_position_size(account_size, risk_percentage, entry_price, technica
         'exit_strategy': exit_strategy
     }
 
-def display_exit_strategy(exit_strategy):
+def format_currency(value, currency='USD'):
+    """Format a number as currency with the appropriate symbol."""
+    symbol = CURRENCIES[currency]['symbol']
+    return f"{symbol}{value:,.2f}"
+
+def display_exit_strategy(exit_strategy, currency='USD'):
     """Display the exit strategy in a formatted way."""
     st.markdown("#### Exit Strategy")
     st.markdown('<div class="exit-strategy">', unsafe_allow_html=True)
@@ -132,22 +145,39 @@ def display_exit_strategy(exit_strategy):
     for i, (target, profit) in enumerate(zip(exit_strategy['targets'], exit_strategy['profits']), 1):
         st.markdown(f"""
         **Target {i}**
-        - Price: ${target:,.2f}
+        - Price: {format_currency(target, currency)}
         - Shares: {exit_strategy['shares_per_target']:.0f}
-        - Profit: ${profit:,.2f}
+        - Profit: {format_currency(profit, currency)}
         - Action: {'Sell 1/3 position, move stop to entry' if i == 1 else 
                   'Sell 1/3 position, move stop to Target 1' if i == 2 else 
                   'Sell remaining position'}
         """)
     
     st.markdown(f"""
-    **Total Potential Profit**: ${exit_strategy['total_profit']:,.2f}
+    **Total Potential Profit**: {format_currency(exit_strategy['total_profit'], currency)}
     """)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Main app
 st.title("Trade Risk Calculator")
 st.markdown("Calculate optimal position sizes and manage risk effectively")
+
+# Initialize session state for currency if not exists
+if 'selected_currency' not in st.session_state:
+    st.session_state.selected_currency = 'USD'
+
+# Currency selector with icons
+st.markdown("### Select Currency")
+currency_cols = st.columns(len(CURRENCIES))
+for i, (currency_code, currency_info) in enumerate(CURRENCIES.items()):
+    with currency_cols[i]:
+        if st.button(
+            f"{currency_info['icon']} {currency_code}",
+            key=f"currency_{currency_code}",
+            use_container_width=True,
+            type="primary" if st.session_state.selected_currency == currency_code else "secondary"
+        ):
+            st.session_state.selected_currency = currency_code
 
 # Info box
 with st.expander("ℹ️ Important Information", expanded=True):
@@ -164,11 +194,11 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("Standard Risk Calculator")
     with st.form("standard_calculator"):
-        account_size_1 = st.number_input("Account Size ($)", value=5000.0, min_value=1.0, step=100.0)
+        account_size_1 = st.number_input(f"Account Size ({CURRENCIES[st.session_state.selected_currency]['symbol']})", value=5000.0, min_value=1.0, step=100.0)
         risk_percentage_1 = st.number_input("Risk Percentage", value=1.0, min_value=0.1, max_value=5.0, step=0.1)
         number_of_shares_1 = st.number_input("Number of Shares", value=45.0, min_value=1.0, step=1.0)
-        entry_price_1 = st.number_input("Entry Price per Share ($)", value=10.0, min_value=0.01, step=0.01)
-        target_price_1 = st.number_input("Target Price per Share ($)", value=12.50, min_value=0.01, step=0.01)
+        entry_price_1 = st.number_input(f"Entry Price per Share ({CURRENCIES[st.session_state.selected_currency]['symbol']})", value=10.0, min_value=0.01, step=0.01)
+        target_price_1 = st.number_input(f"Target Price per Share ({CURRENCIES[st.session_state.selected_currency]['symbol']})", value=12.50, min_value=0.01, step=0.01)
         
         if st.form_submit_button("Calculate Risk"):
             results = calculate_standard_risk(
@@ -178,13 +208,13 @@ with col1:
             
             st.markdown("### Trade Analysis")
             st.markdown("#### Capital Requirements")
-            st.write(f"Total Capital: ${results['capital_required']:,.2f}")
-            st.write(f"Risk per Trade: ${results['total_risk']:,.2f}")
-            st.write(f"Risk per Share: ${results['risk_per_share']:,.2f}")
+            st.write(f"Total Capital: {format_currency(results['capital_required'], st.session_state.selected_currency)}")
+            st.write(f"Risk per Trade: {format_currency(results['total_risk'], st.session_state.selected_currency)}")
+            st.write(f"Risk per Share: {format_currency(results['risk_per_share'], st.session_state.selected_currency)}")
             
             st.markdown("#### Risk Metrics")
-            st.write(f"Stop Loss: ${results['recommended_stop_loss']:,.2f}")
-            st.write(f"Reward per Share: ${results['reward_per_share']:,.2f}")
+            st.write(f"Stop Loss: {format_currency(results['recommended_stop_loss'], st.session_state.selected_currency)}")
+            st.write(f"Reward per Share: {format_currency(results['reward_per_share'], st.session_state.selected_currency)}")
             
             # Risk-to-Reward Matrix
             st.markdown("#### Risk-to-Reward Matrix")
@@ -192,24 +222,24 @@ with col1:
                 entry_price_1, target_price_1, results['risk_per_share']
             )
             st.dataframe(matrix.style.format({
-                'Target Price': '${:.2f}',
-                'Reward per Share': '${:.2f}',
+                'Target Price': lambda x: format_currency(x, st.session_state.selected_currency),
+                'Reward per Share': lambda x: format_currency(x, st.session_state.selected_currency),
                 'Risk-to-Reward Ratio': '{:.2f}',
                 'Reward-to-Risk Ratio': '{:.2f}:1'
             }))
             
             # Display Exit Strategy
-            display_exit_strategy(results['exit_strategy'])
+            display_exit_strategy(results['exit_strategy'], st.session_state.selected_currency)
 
 # Position Size Calculator
 with col2:
     st.subheader("Position Size Calculator")
     with st.form("position_calculator"):
-        account_size_2 = st.number_input("Account Size ($)", value=5000.0, min_value=1.0, step=100.0, key="account_size_2")
+        account_size_2 = st.number_input(f"Account Size ({CURRENCIES[st.session_state.selected_currency]['symbol']})", value=5000.0, min_value=1.0, step=100.0, key="account_size_2")
         risk_percentage_2 = st.number_input("Risk Percentage", value=1.0, min_value=0.1, max_value=5.0, step=0.1, key="risk_percentage_2")
-        entry_price_2 = st.number_input("Entry Price per Share ($)", value=10.0, min_value=0.01, step=0.01, key="entry_price_2")
-        technical_stoploss = st.number_input("Technical Stop Loss Price ($)", value=8.89, min_value=0.01, step=0.01)
-        target_price_2 = st.number_input("Target Price per Share ($)", value=12.50, min_value=0.01, step=0.01, key="target_price_2")
+        entry_price_2 = st.number_input(f"Entry Price per Share ({CURRENCIES[st.session_state.selected_currency]['symbol']})", value=10.0, min_value=0.01, step=0.01, key="entry_price_2")
+        technical_stoploss = st.number_input(f"Technical Stop Loss Price ({CURRENCIES[st.session_state.selected_currency]['symbol']})", value=8.89, min_value=0.01, step=0.01)
+        target_price_2 = st.number_input(f"Target Price per Share ({CURRENCIES[st.session_state.selected_currency]['symbol']})", value=12.50, min_value=0.01, step=0.01, key="target_price_2")
         
         if st.form_submit_button("Calculate Position Size"):
             results = calculate_position_size(
@@ -221,8 +251,8 @@ with col2:
             st.markdown("#### Position Details")
             st.write(f"Adjusted Position Size: {results['adjusted_shares']:.2f} shares")
             st.write(f"Rounded Position Size: {results['adjusted_shares_div3']} shares")
-            st.write(f"Total Capital Required: ${results['capital_required']:,.2f}")
-            st.write(f"Technical Risk per Share: ${results['risk_per_share_tech']:,.2f}")
+            st.write(f"Total Capital Required: {format_currency(results['capital_required'], st.session_state.selected_currency)}")
+            st.write(f"Technical Risk per Share: {format_currency(results['risk_per_share_tech'], st.session_state.selected_currency)}")
             
             # Risk-to-Reward Matrix
             st.markdown("#### Risk-to-Reward Matrix")
@@ -230,14 +260,14 @@ with col2:
                 entry_price_2, target_price_2, results['risk_per_share_tech']
             )
             st.dataframe(matrix.style.format({
-                'Target Price': '${:.2f}',
-                'Reward per Share': '${:.2f}',
+                'Target Price': lambda x: format_currency(x, st.session_state.selected_currency),
+                'Reward per Share': lambda x: format_currency(x, st.session_state.selected_currency),
                 'Risk-to-Reward Ratio': '{:.2f}',
                 'Reward-to-Risk Ratio': '{:.2f}:1'
             }))
             
             # Display Exit Strategy
-            display_exit_strategy(results['exit_strategy'])
+            display_exit_strategy(results['exit_strategy'], st.session_state.selected_currency)
 
 # Risk Management Tips
 st.markdown("### Risk Management Tips")
